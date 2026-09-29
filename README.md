@@ -1,0 +1,218 @@
+# obix-binding-rust
+
+> Previous name: `@obinexusltd/obix-binding-rust` — OBIX packages are named without an npm scope since decision D-102 (2026-09-29); the package, its version and its exports are unchanged.
+
+TypeScript bindings for OBIX Rust runtime integration through the native ABI bridge, targeting WebAssembly.
+
+## Overview
+
+`obix-binding-rust` provides a modular bridge API for:
+
+- Creating and initializing a Rust/WASM binding configuration
+- Invoking ABI-backed polyglot functions with structured envelopes
+- Returning consistent typed invocation errors
+- Tracking WebAssembly memory growth and heap allocation across the binding lifecycle
+- Managing crate feature flags via a feature registry
+- Resolving schema capabilities per `SchemaMode` (WASM, bindgen, LTO)
+
+## Installation
+
+```bash
+npm install obix-binding-rust
+```
+
+## Usage
+
+```ts
+import { createRustBinding } from 'obix-binding-rust';
+
+const binding = createRustBinding({
+  ffiPath: '/path/to/libnativebridge.so',
+  schemaMode: 'hybrid',
+  memoryModel: 'manual',
+  wasmTarget: 'wasm32-unknown-unknown',
+  optimizationLevel: 'release',
+  ltoEnabled: true,
+  crateFeatures: ['serde', 'tokio'],
+});
+
+await binding.initialize();
+
+// Invoke a polyglot function
+const result = await binding.invoke('process_frame', [width, height]);
+console.log(result);
+
+// Register an additional crate feature at runtime
+binding.registerCrateFeature('rayon');
+console.log(binding.getCrateStats());
+
+// Track WASM memory growth
+binding.wasmMemoryTracker.recordGrow(2);
+const mem = binding.getMemoryUsage();
+console.log(mem.wasmMemoryPages, mem.wasmMemoryBytes);
+
+// Compile and deploy a WASM module (stub — grows memory tracker by 1 page)
+await binding.compileAndDeploy(wasmBuffer);
+
+await binding.destroy();
+```
+
+## API
+
+### `createRustBinding(config: RustBindingConfig): RustBindingBridge`
+
+Creates a binding bridge with lifecycle and invocation methods.
+
+#### Lifecycle
+
+| Method | Description |
+|--------|-------------|
+| `initialize()` | Validates `ffiPath` and `schemaMode`, registers configured crate features |
+| `invoke(fn, args)` | Invokes a polyglot function through the native ABI |
+| `destroy()` | Tears down all sub-modules and marks binding uninitialized |
+| `isInitialized()` | Returns whether the binding is ready |
+
+#### Memory
+
+| Method | Description |
+|--------|-------------|
+| `getMemoryUsage()` | Returns `RustWasmMemoryStats` snapshot |
+
+#### Crate features
+
+| Method | Description |
+|--------|-------------|
+| `registerCrateFeature(name)` | Registers a crate feature (no-op if not initialized) |
+| `getCrateStats()` | Returns `CrateRegistryStats` with registered/removed counts |
+
+#### WASM deployment
+
+| Method | Description |
+|--------|-------------|
+| `compileAndDeploy(wasmBuffer)` | Stub — records 1 page of WASM memory growth |
+
+#### Sub-module accessors
+
+| Accessor | Type | Description |
+|----------|------|-------------|
+| `ffiTransport` | `FFITransportAPI` | Raw envelope builder and dispatcher |
+| `wasmMemoryTracker` | `WasmMemoryTrackerAPI` | WASM page-based memory tracker |
+| `crateRegistry` | `CrateRegistryAPI` | Crate feature flag registry |
+| `schemaResolver` | `RustSchemaResolverAPI` | Schema mode resolver and validator |
+
+### `RustBindingConfig`
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `ffiPath` | `string` | required | Path to the native bridge shared library |
+| `schemaMode` | `'monoglot' \| 'polyglot' \| 'hybrid'` | required | Polyglot interop mode |
+| `memoryModel` | `'gc' \| 'manual' \| 'hybrid'` | required | Memory management strategy |
+| `wasmTarget` | `RustWasmTarget` | `undefined` | WASM compile target triple |
+| `crateFeatures` | `string[]` | `[]` | Crate features registered on `initialize()` |
+| `optimizationLevel` | `'dev' \| 'release'` | `undefined` | Rust optimization profile |
+| `ltoEnabled` | `boolean` | `undefined` | Link-time optimization |
+| `bindgenConfig` | `object` | `undefined` | wasm-bindgen configuration options |
+| `crateRegistryMaxSize` | `number` | unlimited | Maximum registered feature entries |
+
+## Error model
+
+Invocation errors are returned as typed objects (never thrown):
+
+| Code | Meaning |
+|------|---------|
+| `NOT_INITIALIZED` | `invoke` called before `initialize()` |
+| `MISSING_SYMBOL` | No `__obixAbiInvoker` registered, or function identifier missing |
+| `INVOCATION_FAILED` | The ABI invoker threw during dispatch |
+
+Each error includes the full `InvocationEnvelope` for debugging at ABI boundaries.
+
+## Schema capabilities by mode
+
+| Capability | `monoglot` | `hybrid` | `polyglot` |
+|-----------|-----------|---------|-----------|
+| `wasmEnabled` | No | Yes | Yes |
+| `bindgenEnabled` | No | Yes | Yes |
+| `ltoEnabled` | No | Yes | Yes |
+| `supportsMultiLanguage` | No | Yes | Yes |
+
+## Development
+
+```bash
+npm run build
+npm test
+```
+
+## Documentation
+
+In-depth guides live in [`docs/`](docs/):
+
+| # | Guide |
+|---|-------|
+| 01 | [Overview](docs/01-overview.md) |
+| 02 | [Installation and Setup](docs/02-installation-and-setup.md) |
+| 03 | [Binding Lifecycle and Configuration](docs/03-binding-lifecycle.md) |
+| 04 | [FFI Transport and the ABI Boundary](docs/04-ffi-transport-and-abi.md) |
+| 05 | [Schema Modes](docs/05-schema-modes.md) |
+| 06 | [Runtime Features](docs/06-runtime-features.md) |
+| 07 | [Best Practices](docs/07-best-practices.md) |
+
+---
+
+## License
+
+MIT
+
+<!-- obix-release:begin — generated by scripts/release/prepare.mjs; edit the text above this line -->
+
+## Installation
+
+```bash
+npm install obix-binding-rust
+```
+
+> **Not yet on npm.** The OBIX packages are prepared for publication and are published only on the owner's authorisation; until then this is the command the published package will answer to.
+
+## API surface
+
+- `obix-binding-rust` — 6 value exports: `createCrateRegistry`, `createFFITransport`, `createRustBinding`, `createSchemaResolver`, `createWasmMemoryTracker`, `normalizeFunctionIdentifier`
+- Type declarations: `./dist/index.d.ts` (and a declaration next to every JS entry point).
+
+## Architecture role
+
+`obix-binding-rust` is a **binding**: it connects OBIX to another syntax, paradigm or language.
+
+The architecture of OBIX — the package families and which packages are public API — is indexed in the umbrella: [docs/architecture.md](https://github.com/obinexus/obix/blob/main/docs/architecture.md).
+
+## Package relationships
+
+- Depends on (OBIX): no other OBIX package.
+- Used by (OBIX): no other OBIX package.
+
+## Testing
+
+- 5 test files ship in the npm package (`__tests__/`): they are the evidence of the package's contract, published so that its verification can be read — not runtime code (no entry point reaches them).
+- Run them with `npm test` (`vitest run`) in the OBIX monorepo, which provides the test tooling (Node's test runner, Vitest, TypeScript).
+
+## Documentation
+
+- [docs/01-overview.md](docs/01-overview.md)
+- [docs/02-installation-and-setup.md](docs/02-installation-and-setup.md)
+- [docs/03-binding-lifecycle.md](docs/03-binding-lifecycle.md)
+- [docs/04-ffi-transport-and-abi.md](docs/04-ffi-transport-and-abi.md)
+- [docs/05-schema-modes.md](docs/05-schema-modes.md)
+- [docs/06-runtime-features.md](docs/06-runtime-features.md)
+- [docs/07-best-practices.md](docs/07-best-practices.md)
+- [CHANGELOG.md](CHANGELOG.md)
+- The OBIX architecture index: [obix/docs/architecture.md](https://github.com/obinexus/obix/blob/main/docs/architecture.md)
+
+## Repository
+
+- https://github.com/obinexus/obix-binding-rust — `git@github.com:obinexus/obix-binding-rust.git`
+- Issues: https://github.com/obinexus/obix-binding-rust/issues
+- The repository is a clean export of the package from the OBIX monorepo; its lineage (the monorepo commit it was exported from, the sources it was recovered from, earlier names) is in `PROVENANCE.json`.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
+
+<!-- obix-release:end -->
